@@ -56,26 +56,78 @@ pip install gtfs2gmns
 4. To exit the virtual environment, simply type:
 deactivate
 
+### *Step 3: Run test code*
 
+```python
+from gtfs2gmns import GTFS2GMNS
+
+# Input and Output Directories
+gtfs_input_dir = './GTFS'
+gtfs_output_dir = './GMNS'
+
+# Time and Date Configuration
+time_period = "07:00:00_08:00:00"
+date_period = []  # Assuming you might add specific dates to this list for testing
+
+# Create an instance of the GTFS2GMNS class
+gtfs2gmns_converter = GTFS2GMNS(
+    gtfs_input_dir=gtfs_input_dir,
+    gtfs_output_dir=gtfs_output_dir,
+    time_period=time_period,
+    date_period=date_period
+)
+
+# Load GTFS data
+print("Loading GTFS data...")
+gtfs2gmns_converter.load_gtfs()
+
+# Generate GMNS nodes and links
+print("Generating GMNS nodes and links...")
+nodes, links = gtfs2gmns_converter.gen_gmns_nodes_links()
+
+# Print outputs to verify
+print("Nodes DataFrame:")
+print(nodes.head())  # Print first few rows of the nodes DataFrame
+
+print("Links DataFrame:")
+print(links.head())  # Print first few rows of the links DataFrame
+
+###############################################################################################
+# Generate access links if zone.csv is available
+print("Generating access links...")
+zone_path = './zone.csv'  # Update this path to your actual zone file location
+node_path = f"{gtfs_output_dir}/node.csv"  # Assuming nodes are saved as node.csv in the GMNS directory
+radius = 500.0  # Define your desired radius for linking zones to nodes
+k_closest = 5  # Optional: define the number of closest nodes you want to connect to each zone
+
+# Generate and print access links
+access_links = gtfs2gmns_converter.generate_access_link(zone_path, node_path, radius, k_closest)
+print("Access Links DataFrame:")
+print(access_links.head())
+
+# Save access links to a CSV file
+access_links.to_csv(f"{gtfs_output_dir}/access_links.csv", index=False)
+print("Access Links saved to access_links.csv.")
+```
 
 ## Main steps in gtfs2gmns code
 
-### *Read GTFS data*
+### *1. Read GTFS data*
 
-**Step 1.1: Read routes.txt**
+**1.1 Read routes.txt**
 
 - route_id, route_long_name, route_short_name, route_url, route_type
 
-**Step 1.2: Read stop.txt**
+**1.2 Read stop.txt**
 
 - stop_id, stop_lat, stop_lon, direction, location_type, position, stop_code, stop_name, zone_id
 
-**Step 1.3: Read trips.txt**
+**1.3 Read trips.txt**
 
 - trip_id, route_id, service_id, block_id, direction_id, shape_id, trip_type
 - and create the directed_route_id by combining route_id and direction_id
 
-**Step 1.4: Read stop_times.txt**
+**1.4 Read stop_times.txt**
 
 - trip_id, stop_id, arrival_time, deaprture_time, stop_sequence
 - create directed_route_stop_id by combining directed_route_id and stop_id through the trip_id
@@ -85,13 +137,13 @@ deactivate
 - fetch the geometry of the direction_route_stop_id
 - return the arrival_time for every stop
 
-### *Building service network*
+### *2. Building service network*
 
-**Step 2.1 Create physical nodes**
+**2.1 Create physical nodes**
 
 - physical node is the original stop in standard GTFS
 
-**Step 2.2 Create directed route stop vertexes**
+**2.2 Create directed route stop vertexes**
 
 - add route stop vertexes. the node_id of route stop nodes starts from 100001
 
@@ -100,17 +152,13 @@ deactivate
 - add entrance link from physical node to route stop node
 - add exit link from route stop node to physical node. As they both connect to the physical nodes, the in-station transfer process can be also implemented
 
-**Step 2.3 Create physical arcs**
+**2.3 Create physical arcs**
 
 - add physical links between each physical node pair of each trip
 
-**Step 2.4 Create service arcs**
+**2.4 Create service arcs**
 
 - add service links between each route stop pair of each trip
-
-## Visualization
-
-You can visualize generated networks using [NeXTA](https://github.com/xzhou99/NeXTA-GMNS) or [QGIS](https://qgis.org/).
 
 ### Functions and Attributes
 
@@ -160,6 +208,9 @@ You can visualize generated networks using [NeXTA](https://github.com/xzhou99/Ne
 
 
 
+## Visualization
+
+You can visualize generated networks using [NeXTA](https://github.com/xzhou99/NeXTA-GMNS) or [QGIS](https://qgis.org/).
 
 ## Upcoming Features
 
