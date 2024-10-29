@@ -43,17 +43,25 @@ _Optional_: Installing in a virtual environment
 If you prefer to keep your Python environment isolated for specific projects, you can install gtfs2gmns in a virtual environment.
 
 1. Create a virtual environment (replace env_name with your preferred name):
-
+```python
 python -m venv env_name
-
+```
 2. Activate the virtual environment:
-On Windows: .\env_name\Scripts\activate
-On macOS/Linux: source env_name/bin/activate
+On Windows:
+```python
+.\env_name\Scripts\activate
+```
+On macOS/Linux: 
+```python
+source env_name/bin/activate
+```
 
-3. Install gtfs2gmns within the virtual environment:
+4. Install gtfs2gmns within the virtual environment:
+```python
 pip install gtfs2gmns
+```
 
-4. To exit the virtual environment, simply type:
+6. To exit the virtual environment, simply type:
 deactivate
 
 ### *Step 3: Run test code*
