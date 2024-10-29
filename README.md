@@ -14,7 +14,7 @@ Users can customize:
 
 ## Getting Started
 
-### *Download GTFS Data*
+### *Step 1: Download GTFS Data*
 
 On TransitFeed [homepage](https://transitfeeds.com/), users can browse and download official GTFS  feeds from around the world. Make sure that the following files are present, so that we can proceed.
 
@@ -26,7 +26,7 @@ On TransitFeed [homepage](https://transitfeeds.com/), users can browse and downl
 
 GTFS2GMNS can handle the transit data from several agencies. Users need to configure different sub-files in the same directory. Under the `test/GTFS` folder, a subfolder `BART` with its own GTFS data is set up.
 
-### *Install gtfs2gmns package*
+### *Step 2: Install gtfs2gmns package*
 
 Before you install gtfs2gmns, please ensure you have installed Python 3.9 or higher on your system.
 
