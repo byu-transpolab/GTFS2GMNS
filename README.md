@@ -1,8 +1,16 @@
 ## GTFS2GMNS
 
-The open-source Python codes (GTFS2GMNS) is released to facilitate researchers and planners to construct the multi-modal transit networks easily from generic [General Transit Feed Specification (GTFS)](https://gtfs.org/) to the network modeling format in [General Modeling Network Specification (GMNS)](https://github.com/zephyr-data-specs/GMNS). The converted physical and service networks in GMNS format are more convenient for network modeling tasks such as transit network routing, traffic flow assignment, simulation and service network optimization.
+The open-source Python package, gtfs2gmns, is released to facilitate researchers and planners to construct the multi-modal transit networks easily from generic [General Transit Feed Specification (GTFS)](https://gtfs.org/) to the network modeling format in [General Modeling Network Specification (GMNS)](https://github.com/zephyr-data-specs/GMNS). The converted physical and service networks in GMNS format are more convenient for network modeling tasks such as transit network routing, traffic flow assignment, simulation, and service network optimization.
 
-Your comments will be valuable for code review and improvement. Please feel free to add your comments to our Google document of [GTFS2GMNS Users&#39; Guide](https://docs.google.com/document/d/1-A2g4ZjJu-gzusEKcSoOXzr95S3tv7sj/edit?usp=sharing&ouid=112385243549486266715&rtpof=true&sd=true).
+### *Input and Output*
+
+**Input**: Static GTFS data
+**Output**: Transit service network with GMNS format (node.csv and link.csv).
+Users can customize:
+1. the path of input GTFS data and output GMNS files
+2. `time_period`, such as 12:00 to 13:00.
+3. `date_period`, such as 10/29/2024.
+
 
 ## Getting Started
 
@@ -16,28 +24,41 @@ On TransitFeed [homepage](https://transitfeeds.com/), users can browse and downl
 * stop_times.txt
 * agency.txt
 
-GTFS2GMNS can handle the transit data from several agencies. Users need to configure different sub-files in the same directory. Under the `test/GTFS` folder, a subfolder `Pheonix` with its owm GTFS data is set up.
+GTFS2GMNS can handle the transit data from several agencies. Users need to configure different sub-files in the same directory. Under the `test/GTFS` folder, a subfolder `BART` with its own GTFS data is set up.
 
-### *Convert GTFS Data into GMNS Format*
+### *Install gtfs2gmns package*
+
+Before you install gtfs2gmns, please ensure you have installed Python 3.9 or higher on your system.
+
+Please open your terminal (or command prompt) and run the following command:
 
 ```python
-if __name__ == '__main__':
-    global period_start_time
-    global period_end_time
-    input_gtfs_path = 'GTFS'
-    output_gmns_path = '.'
-    time_period_id = 1
-    time_period = '1200_1300'
-    period_start_time, period_end_time = _hhmm_to_minutes(time_period)
-
-    gtfs2gmns(input_gtfs_path, output_gmns_path)
+pip install gtfs2gmns
 ```
 
-The input parameter  `input_gtfs_path` is the path of GTFS data, and the parameter  `output_gmns_path` is the path of output GMNS files. Users can customize the parameter  `time_period`, such as 12:00 to 13:00.
+This command will download and install gtfs2gmns along with any necessary dependencies.
 
-The output files include node.csv and link.csv.
+_Optional_: Installing in a virtual environment 
 
-## Main Steps
+If you prefer to keep your Python environment isolated for specific projects, you can install gtfs2gmns in a virtual environment.
+
+1. Create a virtual environment (replace env_name with your preferred name):
+
+python -m venv env_name
+
+2. Activate the virtual environment:
+On Windows: .\env_name\Scripts\activate
+On macOS/Linux: source env_name/bin/activate
+
+3. Install gtfs2gmns within the virtual environment:
+pip install gtfs2gmns
+
+4. To exit the virtual environment, simply type:
+deactivate
+
+
+
+## Main steps in gtfs2gmns code
 
 ### *Read GTFS data*
 
@@ -91,65 +112,6 @@ The output files include node.csv and link.csv.
 
 You can visualize generated networks using [NeXTA](https://github.com/xzhou99/NeXTA-GMNS) or [QGIS](https://qgis.org/).
 
-## Quick Tutorial
-
-### Introducing Functional Tools within GTFS2GMNS
-
-GTFS2GMNS is a Python package that serves as a class-based instance, specifically designed for reading, converting, analyzing, and visualizing GTFS data. The converted physical and service networks in GMNS format offer enhanced convenience for a variety of networkAg modeling tasks, including transit network routing, traffic flow assignment, simulation, and service network optimization.
-
-### Input for class GTFS2GMNS
-
-- **gtfs_input_dir** :  str, the dir store GTFS data. **GTFS2GMNS is capable of reading multiple GTFS data sets.**
-- **time_period**: str, the time period sprcified (for data selection), default is "07:00:00_08:00:00"
-- **date_period**: list, user can specified exact data or dates for selection
-- **gtfs_output_dir**: str, the output folder to save data. defalut is ""
-- **isSaveToCSV**: bool, whether to save gmns node and link to local machine, default is True
-
-### *Code Example*
-
-#### Loading gtfs data
-
-```python
-from gtfs2gmns import GTFS2GMNS
-
-if __name__ == "__main__":
-    gtfs_input_dir = r"Your-Path-Folder-To-GTFS-Data"
-
-    # Explain: GMNS2GMNS is capable of reading multiple GTFS data sets
-    """
-	--root folder
-	    -- subfolder (GTFS data of agency 1)
-	    -- subfolder (GTFS data of agency 2)
-	    -- subfolder (GTFS data of agency 3)
-	    -- ...
-	then, assign gtfs_input_foler = root folder
-    """
-
-    time_period = "00:00:00_23:59:59"
-    date_period = []
-
-    gg = GTFS2GMNS(gtfs_input_dir, time_period, date_period, gtfs_output_dir="", isSaveToCSV=False)
-
-```
-
-#### Generate access line between zones to nodes
-
-```python
-
-import gtfs2gmns as gg
-
-path_zone = "Path to zone.csv"    # please make sure you have zone_id, x_coord, y_coord in columns
-path_node = "Path to node.csv"    # please make sure you have node_id, x_coord, y_coord in columns
-
-radius = 100 # unit in meters
-k_closest = 0 # if 0, generate all accessible links within radius. if 1, closest link within the radius...
-
-access_links = gg.generate_access_lins(path_zone, path_node, radius, k_closest)
-
-access_links.to_csv("access_link.csv", index=False)
-
-```
-
 ### Functions and Attributes
 
 
@@ -201,7 +163,7 @@ access_links.to_csv("access_link.csv", index=False)
 
 ## Upcoming Features
 
-- [ ] Output service and trace files.
+- [ ] Map matching transit network and auto network.
 - [ ] Set the time period and add vdf_fftt and vdf_freq fields in link files.
 - [ ] Add Visualization functions
   - [ ] Stops
