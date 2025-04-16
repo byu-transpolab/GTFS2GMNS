@@ -9,7 +9,6 @@ import time
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_rows', 100)
 
-
 def reading_data(gtfs_path):
     print('start reading input GTFS files...')
     agency_df = _reading_text(gtfs_path + os.sep + 'agency')
@@ -70,6 +69,7 @@ def reading_data(gtfs_path):
     stop_time_df = stop_time_df[stop_time_df.arrival_time != ' ']
     stop_time_df = stop_time_df[stop_time_df.departure_time != ' ']
     print("number of stop_time records after dropping empty arrival and departure time =", len(stop_time_df))
+    print("\n")
 
     # convert timestamp to minute
     # as some agencies might have trips overlapping two days, should use _to_timedelta to convert the data
@@ -209,7 +209,7 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
     
     linkoffset = 100000 #How much more the link numbers will be
 
-    print("1. start creating route links...")
+    print("\nCreating route links...")
     """service links"""
     number_of_route_links = 0
     iteration_group = directed_trip_route_stop_time_df.groupby('directed_service_id')
@@ -243,22 +243,13 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
                 length = _calculate_distance_from_geometry(from_node_lon, from_node_lat, to_node_lon, to_node_lat)
                 lanes = 1 # number_of_trips Whis is this used?
                 capacity = 0 # Emme takes this better then 999999
-                VDF_fftt1 = one_line_df.iloc[k + 1].arrival_time - one_line_df.iloc[k].arrival_time
+                VDF_fftt1 = one_line_df.iloc[k + 1].arrival_time - one_line_df.iloc[k].arrival_time # Given in minutes
                 # minutes
                 VDF_cap1 = lanes * capacity
-                
-                
-                # If US Customary Units
-                free_speed = (length / (VDF_fftt1 + 0.001)) * 60
-                
-                #If SI units km
-                #free_speed = ((length / 1000) / (VDF_fftt1 + 0.001)) * 60
-                               #(kilometers/minutes)*60 = kilometer/hour
-                
-                
-                
-                
-                
+                if measurment_system == "metric": # length = miles/hour
+                    free_speed = ((length / 1000) / (VDF_fftt1 + 0.001)) * 60
+                elif measurment_system == "customary": # length = km/hour
+                    free_speed = (length / (VDF_fftt1 + 0.001)) * 60
                 VDF_alpha1 = 0.15
                 VDF_beta1 = 4
                 VDF_penalty1 = 0
@@ -278,10 +269,10 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
                 number_of_route_links += 1
                 if number_of_route_links % 50 == 0:
                     time_end = time.time()
-                    print('convert ', number_of_route_links,
-                          'service links successfully...', 'using time', time_end - time_start, 's')
+                    #print('convert ', number_of_route_links,
+                          #'service links successfully...', 'using time', time_end - time_start, 's')
 
-    print("2. start creating boarding links from stations to their passing routes...")
+    print("reating boarding links from stations to their passing routes...")
     """boarding_links"""
     service_node_df = node_df[node_df.node_id != node_df.physical_node_id]
     #  select service node from node_df
@@ -347,8 +338,8 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
         #  one inbound link and one outbound link
         if number_of_sta2route_links % 50 == 0:
             time_end = time.time()
-            print('convert ', number_of_sta2route_links,
-                  'boarding links successfully...', 'using time', time_end - time_start, 's')
+            #print('convert ', number_of_sta2route_links,
+                  #'boarding links successfully...', 'using time', time_end - time_start, 's')
 
     return one_agency_link_list
 
@@ -612,13 +603,30 @@ def _calculate_distance_from_geometry(lon1, lat1, lon2, lat2):  # WGS84 transfer
     
     # Make so SI and customary units can be used.
     
-    distance = radius * c * 1000 / 1609.34  # mile
+    #distance = radius * c * 1000 / 1609.34  # mile
     # distance = radius * c * 1000  # meter
     
-    
-    
+    if measurment_system == "metric": # miles
+        distance = radius * c * 1000
+        return distance
+    elif measurment_system == "customary": # meters
+        distance = radius * c * 1000 / 1609.34
+        return distance
     
     return distance
+
+def set_units (units):
+    global measurment_system
+    mesurement_units = ['customary', 'metric']
+    if units not in mesurement_units:
+        x = ', '.join(mesurement_units)
+        raise Exception(
+            f'Invalid measurement System: {units} !'
+            f' Please choose one available unit from {x}')
+    elif units == "customary": # Set global variable for units
+        measurment_system = "customary"
+    elif units == "metric":
+        measurment_system = "metric"
 
 
 def _hhmm_to_minutes(time_period_1):
@@ -632,11 +640,23 @@ def _hhmm_to_minutes(time_period_1):
 """ ------------------main functions------------------ """
 
 
-def gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True):
+def gtfs2gmns(input_path, output_path, time_period, units = 'customary', isSaveToCSV = True):
+    """
+    Parameters:
+        input_path: Source files with gtfs txt files
+        output_path: Location for output .csv
+        time_period: Given in '0000_2359' formate
+        units: "customary" for miles and mph, or "metric" for meters and kph
+        isSaveTOCSV: Save results to .csv
+    """
     global period_start_time
     global period_end_time
     period_start_time, period_end_time = _hhmm_to_minutes(time_period)
     
+    # Checking valid units, then setting global units variable
+    set_units (units)
+
+        
     start_time = time.time()
     folders = [folder for folder in os.listdir(input_path) if "check" not in folder]
     gtfs_folder_list = []
@@ -671,6 +691,7 @@ def gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True):
 
         if i == len(gtfs_folder_list):
             print('output')
+        print("\n")
         print('Conversion of  Agency{}...'.format(agency_num + 1), ' have done..')
 
     all_node_df = pd.concat(all_node_list)
@@ -706,7 +727,6 @@ def gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True):
     
     all_link_df = all_link_df.drop_duplicates(
             subset=['from_node_id', 'to_node_id'], keep='last').reset_index(drop=True)
-    print('run time -->', time.time() - start_time)
     if isSaveToCSV == True:
             
             if os.path.exists("node_transit.csv"):
@@ -724,9 +744,10 @@ def gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True):
                     keep='last').reset_index(drop=True)
             all_link_df.to_csv(link_csv_path, index=False)
 
-            print(f"Info: successfully converted gtfs data to node and link data:\n{node_csv_path} \n{link_csv_path}")
+            print("\n")
+            print(f"Successfully converted gtfs data to node and link data:\n{node_csv_path} \n{link_csv_path}")
         
-            print("Info: successfully converted gtfs data to node and link and return node and link dataframes")
+            print("Successfully converted gtfs data to node and link and returning node and link dataframes")
     
     print('Total Time -->', time.time() - start_time)
     
@@ -738,6 +759,7 @@ if __name__ == '__main__':
     output_path = 'network/roanoke/transit'
     time_period_id = 1
     time_period = '0000_2359'
+    units = "customary" #customary or metric
     
 
-    gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True)
+    gtfs2gmns(input_path, output_path, time_period, units, isSaveToCSV = True)

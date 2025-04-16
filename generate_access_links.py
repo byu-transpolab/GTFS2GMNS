@@ -10,7 +10,15 @@ from scipy.spatial import cKDTree
 import pyufunc as uf
 from pyufunc import gmns_geo
 
-def generate_access_link(hwy_node_path: str, tran_node_path: str) -> pd.DataFrame:
+def generate_access_link(hwy_node_path: str, tran_node_path: str, units = "customary") -> pd.DataFrame:
+    # Setting measurement system
+    mesurement_units = ['customary', 'metric']
+    if units not in mesurement_units:
+        x = ', '.join(mesurement_units)
+        raise Exception(
+            f'Invalid measurement System: {units} !'
+            f' Please choose one available unit from {x}')
+    
     # Load highway and transit node data
     df_hwy_node = pd.read_csv(hwy_node_path, usecols=['node_id', 'x_coord', 'y_coord'])
     df_tran_node = pd.read_csv(tran_node_path, usecols=['node_id', 'x_coord', 'y_coord', 'directed_service_id', 'node_type'])
@@ -57,6 +65,12 @@ def generate_access_link(hwy_node_path: str, tran_node_path: str) -> pd.DataFram
         # Calculate geodesic distance
         distance = uf.calc_distance_on_unit_sphere(tran_point, hwy_point, "mile")
 
+        # Set free_speed according to 
+        if units == "customary":
+            speed = 2.72727 #4 *3600 / 5280
+        elif units == "metric":
+            speed = 4.392    #1.22 * 3600 / 1000
+            
         # Create access link
         access_links.append(
             gmns_geo.Link(
@@ -67,7 +81,7 @@ def generate_access_link(hwy_node_path: str, tran_node_path: str) -> pd.DataFram
                 length=distance,
                 lanes=1,
                 dir_flag = 0,
-                free_speed= 2.72727, #4 *3600 / 5280
+                free_speed= speed,
                 capacity= 0,
                 allowed_uses='t',
                 geometry=LineString([tran_point, hwy_point])
