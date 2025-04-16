@@ -5,6 +5,10 @@ import datetime
 import numpy as np
 import pandas as pd
 import time
+from shapely.geometry import Point, LineString
+from scipy.spatial import cKDTree
+import pyufunc as uf
+from pyufunc import gmns_geo
 
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_rows', 100)
@@ -147,7 +151,7 @@ def create_nodes(directed_trip_route_stop_time_df, agency_num):
     physical_node_df = physical_node_df.sort_values(by=['name'])
     physical_node_df['node_id'] = \
         np.linspace(start=1, stop=len(physical_node_df), num=len(physical_node_df)).astype('int32')
-    physical_node_df['node_id'] += int('{}000000'.format(agency_num))
+    physical_node_df['node_id'] += int('{}00000'.format(agency_num))#Node ID number
     physical_node_df['physical_node_id'] = physical_node_df['node_id']
     physical_node_df['x_coord'] = temp_df['stop_lon'].astype(float)
     physical_node_df['y_coord'] = temp_df['stop_lat'].astype(float)
@@ -175,7 +179,7 @@ def create_nodes(directed_trip_route_stop_time_df, agency_num):
     service_node_df['node_id'] = \
         np.linspace(start=1, stop=len(service_node_df), num=len(service_node_df)).astype('int32')
     service_node_df['physical_node_id'] = temp_df.apply(lambda x: stop_name_id_dict[x.stop_id], axis=1)
-    service_node_df['node_id'] += int('{}500000'.format(agency_num))
+    service_node_df['node_id'] += int('{}50000'.format(agency_num)) #Service Node ID number
 
     service_node_df['x_coord'] = temp_df['stop_lon'].astype(float) - 0.000100
     service_node_df['y_coord'] = temp_df['stop_lat'].astype(float) - 0.000100
@@ -206,6 +210,8 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
     node_lon_dict = dict(zip(node_df['node_id'], node_df['x_coord']))
     node_lat_dict = dict(zip(node_df['node_id'], node_df['y_coord']))
     frequency_dict = {}
+    
+    linkoffset = 100000 #How much more the link numbers will be
 
     print("1. start creating route links...")
     """service links"""
@@ -226,26 +232,37 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
             number_of_records = len(one_line_df)
             one_line_df = one_line_df.reset_index()
             for k in range(number_of_records - 1):
-                link_id = 1000000 * agency_num + number_of_route_links + 1
+                link_id = linkoffset * agency_num + number_of_route_links + 1
                 from_node_id = node_id_dict[one_line_df.iloc[k].directed_service_stop_id]
                 to_node_id = node_id_dict[one_line_df.iloc[k + 1].directed_service_stop_id]
                 facility_type = _convert_route_type_to_link_type(one_line_df.iloc[k].route_type)
                 dir_flag = 1
                 directed_route_id = one_line_df.iloc[k].directed_route_id
                 link_type = 1
-                link_type_name = 'service_links'
+                link_type_name = 'transit_service_links'
                 from_node_lon = float(one_line_df.iloc[k].stop_lon)
                 from_node_lat = float(one_line_df.iloc[k].stop_lat)
                 to_node_lon = float(one_line_df.iloc[k + 1].stop_lon)
                 to_node_lat = float(one_line_df.iloc[k + 1].stop_lat)
                 length = _calculate_distance_from_geometry(from_node_lon, from_node_lat, to_node_lon, to_node_lat)
-                lanes = number_of_trips
-                capacity = 999999
+                lanes = 1 # number_of_trips Whis is this used?
+                capacity = 0 # Emme takes this better then 999999
                 VDF_fftt1 = one_line_df.iloc[k + 1].arrival_time - one_line_df.iloc[k].arrival_time
                 # minutes
                 VDF_cap1 = lanes * capacity
-                free_speed = ((length / 1000) / (VDF_fftt1 + 0.001)) * 60
-                # (kilometers/minutes)*60 = kilometer/hour
+                
+                
+                # If US Customary Units
+                free_speed = (length / (VDF_fftt1 + 0.001)) * 60
+                
+                #If SI units km
+                #free_speed = ((length / 1000) / (VDF_fftt1 + 0.001)) * 60
+                               #(kilometers/minutes)*60 = kilometer/hour
+                
+                
+                
+                
+                
                 VDF_alpha1 = 0.15
                 VDF_beta1 = 4
                 VDF_penalty1 = 0
@@ -275,7 +292,7 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
     service_node_df = service_node_df.reset_index()
     number_of_sta2route_links = 0
     for iter, row in service_node_df.iterrows():
-        link_id = agency_num * 1000000 + number_of_route_links + number_of_sta2route_links
+        link_id = agency_num * linkoffset + number_of_route_links + number_of_sta2route_links
         from_node_id = row.physical_node_id
         to_node_id = row.node_id
         facility_type = _convert_route_type_to_link_type(row.route_type)
@@ -290,7 +307,7 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
         length = _calculate_distance_from_geometry(from_node_lon, from_node_lat, to_node_lon, to_node_lat)
         free_speed = 2
         lanes = 1
-        capacity = 999999
+        capacity = 0 #Instead of 999999. EMME likes this more
         VDF_cap1 = lanes * capacity
         VDF_alpha1 = 0.15
         VDF_beta1 = 4
@@ -320,7 +337,7 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
         number_of_sta2route_links += 1
 
         # outbound links (boarding)
-        link_id = agency_num * 1000000 + number_of_route_links + number_of_sta2route_links
+        link_id = agency_num * linkoffset + number_of_route_links + number_of_sta2route_links
         VDF_fftt1 = 1  # (length / free_speed) * 60
         #  the time of outbound time
         link_list_outbound = [link_id, to_node_id, from_node_id, facility_type, dir_flag, directed_route_id,
@@ -465,16 +482,16 @@ def _allowed_use_function(route_type):
     allowed_use = ""
     if int(route_type) == 0:
         # tram
-        allowed_use = "w_bus_only;w_bus_metro;d_bus_only;d_bus_metro"
+        allowed_use = 't' #"w_bus_only;w_bus_metro;d_bus_only;d_bus_metro"
     if int(route_type) == 1:
         # metro
-        allowed_use = "w_metro_only;w_bus_metro;d_metro_only;d_bus_metro"
+        allowed_use = 't' #"w_metro_only;w_bus_metro;d_metro_only;d_bus_metro"
     if int(route_type) == 2:
         # rail
-        allowed_use = "w_rail_only;d_rail_only"
+        allowed_use = 't' #"w_rail_only;d_rail_only"
     if int(route_type) == 3:
         # bus
-        allowed_use = "w_bus_only;w_bus_metro;d_bus_only;d_bus_metro"
+        allowed_use = 't' #"w_bus_only;w_bus_metro;d_bus_only;d_bus_metro"
     return allowed_use
 
 
@@ -595,9 +612,84 @@ def _calculate_distance_from_geometry(lon1, lat1, lon2, lat2):  # WGS84 transfer
     a = math.sin(d_latitude / 2) * math.sin(d_latitude / 2) + math.cos(lat1 * math.pi / 180.0) * math.cos(
         lat2 * math.pi / 180.0) * math.sin(d_longitude / 2) * math.sin(d_longitude / 2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    # distance = radius * c * 1000 / 1609.34  # mile
-    distance = radius * c * 1000  # meter
+    
+    
+    # Make so SI and customary units can be used.
+    
+    distance = radius * c * 1000 / 1609.34  # mile
+    # distance = radius * c * 1000  # meter
+    
+    
+    
+    
     return distance
+
+def generate_access_link(hwy_node_path: str, tran_node_path: str) -> pd.DataFrame:
+    # Load highway and transit node data
+    df_hwy_node = pd.read_csv(hwy_node_path, usecols=['node_id', 'x_coord', 'y_coord'])
+    df_tran_node = pd.read_csv(tran_node_path, usecols=['node_id', 'x_coord', 'y_coord', 'directed_service_id', 'node_type'])
+
+    # Filter real transit nodes (remove those with directed_service_id) & keep only "bus_service_node"
+    df_tran_node_real = df_tran_node[
+        
+        (df_tran_node['node_type'] == "bus_service_node")
+    ].copy()
+
+    # Convert coordinates to float for safety
+    df_hwy_node[['x_coord', 'y_coord']] = df_hwy_node[['x_coord', 'y_coord']].astype(float)
+    df_tran_node_real[['x_coord', 'y_coord']] = df_tran_node_real[['x_coord', 'y_coord']].astype(float)
+
+    # Convert to NumPy arrays for fast computation
+    hwy_coords = df_hwy_node[['x_coord', 'y_coord']].to_numpy()
+    tran_coords = df_tran_node_real[['x_coord', 'y_coord']].to_numpy()
+
+    # If no bus service nodes are found, return empty DataFrame
+    if len(tran_coords) == 0:
+        return pd.DataFrame()
+
+    # Build KDTree for highway nodes (fast nearest neighbor search)
+    tree = cKDTree(hwy_coords)
+
+    # Query each transit node to find the nearest highway node
+    distances, indices = tree.query(tran_coords, distance_upper_bound=10000)
+
+    access_links = []
+
+    # Process each transit node (find its nearest highway node)
+    for i, tran_node_id in enumerate(df_tran_node_real['node_id']):
+        hwy_index = indices[i]
+
+        # Ignore if no valid highway node was found within the radius
+        if hwy_index == len(hwy_coords):
+            continue
+
+        # Get corresponding highway node data
+        hwy_node_id = df_hwy_node.iloc[hwy_index]['node_id']
+        tran_point = Point(tran_coords[i])
+        hwy_point = Point(hwy_coords[hwy_index])
+
+        # Calculate geodesic distance
+        distance = uf.calc_distance_on_unit_sphere(tran_point, hwy_point, "mile")
+
+        # Create access link
+        access_links.append(
+            gmns_geo.Link(
+                id = f"{tran_node_id}", 
+                name = "transit_access_link",
+                from_node_id=tran_node_id,
+                to_node_id=int (hwy_node_id),
+                length=distance,
+                lanes=1,
+                dir_flag = 0,
+                free_speed= 2.72727, #4 *3600 / 5280
+                capacity= 0,
+                allowed_uses='t',
+                geometry=LineString([tran_point, hwy_point])
+            )
+        )
+
+    # Convert to DataFrame
+    return pd.DataFrame([link.__dict__ for link in access_links]) if access_links else pd.DataFrame()
 
 
 def _hhmm_to_minutes(time_period_1):
@@ -611,7 +703,12 @@ def _hhmm_to_minutes(time_period_1):
 """ ------------------main functions------------------ """
 
 
-def gtfs2gmns(input_path, output_path):
+def gtfs2gmns(input_path, output_path, time_period):
+    global period_start_time
+    global period_end_time
+    period_start_time, period_end_time = _hhmm_to_minutes(time_period)
+    
+    
     start_time = time.time()
     folders = [folder for folder in os.listdir(input_path) if "check" not in folder]
     gtfs_folder_list = []
@@ -655,14 +752,14 @@ def gtfs2gmns(input_path, output_path):
     all_link_list = create_transferring_links(all_node_df, all_link_list)
 
     all_link_df = pd.DataFrame(all_link_list)
-    all_link_df.rename(columns={0: 'link_id',
+    all_link_df.rename(columns={0: 'id', # Match hwy network
                                 1: 'from_node_id',
                                 2: 'to_node_id',
-                                3: 'facility_type',
+                                3: 'transit_type', #'facility_type'
                                 4: 'dir_flag',
                                 5: 'directed_route_id',
                                 6: 'link_type',
-                                7: 'link_type_name',
+                                7: 'name', #'link_type_name'
                                 8: 'length',
                                 9: 'lanes',
                                 10: 'capacity',
@@ -674,7 +771,7 @@ def gtfs2gmns(input_path, output_path):
                                 16: 'VDF_beta1',
                                 17: 'VDF_penalty1',
                                 18: 'geometry',
-                                19: 'VDF_allowed_uses1',
+                                19: 'allowed_uses', #'VDF_allowed_uses1',
                                 20: 'agency_name',
                                 21: 'stop_sequence',
                                 22: 'directed_service_id'}, inplace=True)
@@ -691,12 +788,10 @@ def gtfs2gmns(input_path, output_path):
 
 
 if __name__ == '__main__':
-    global period_start_time
-    global period_end_time
+    
     input_path = './GTFS/Phoenix'
     output_path = './GMNS/Phoenix'
     time_period_id = 1
     time_period = '0700_0800'
-    period_start_time, period_end_time = _hhmm_to_minutes(time_period)
 
-    gtfs2gmns(input_path, output_path)
+    gtfs2gmns(input_path, output_path, time_period)

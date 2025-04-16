@@ -4,6 +4,8 @@ The open-source Python codes (GTFS2GMNS) is released to facilitate researchers a
 
 Your comments will be valuable for code review and improvement. Please feel free to add your comments to our Google document of [GTFS2GMNS Users' Guide](https://docs.google.com/document/d/1-A2g4ZjJu-gzusEKcSoOXzr95S3tv7sj/edit?usp=sharing&ouid=112385243549486266715&rtpof=true&sd=true).
 
+Modified to work with the OpenSource Modeling project. 
+
 
 ## Getting Started
 
