@@ -5,10 +5,6 @@ import datetime
 import numpy as np
 import pandas as pd
 import time
-from shapely.geometry import Point, LineString
-from scipy.spatial import cKDTree
-import pyufunc as uf
-from pyufunc import gmns_geo
 
 pd.set_option('display.max_columns', 100)
 pd.set_option('display.max_rows', 100)
@@ -299,7 +295,7 @@ def create_service_boarding_links(directed_trip_route_stop_time_df, node_df, age
         dir_flag = 1
         directed_route_id = row.directed_route_id
         link_type = 2
-        link_type_name = 'boarding_links'
+        link_type_name = 'transit_boarding_links'
         to_node_lon = row.x_coord
         to_node_lat = row.y_coord
         from_node_lon = node_lon_dict[row.physical_node_id]
@@ -624,73 +620,6 @@ def _calculate_distance_from_geometry(lon1, lat1, lon2, lat2):  # WGS84 transfer
     
     return distance
 
-def generate_access_link(hwy_node_path: str, tran_node_path: str) -> pd.DataFrame:
-    # Load highway and transit node data
-    df_hwy_node = pd.read_csv(hwy_node_path, usecols=['node_id', 'x_coord', 'y_coord'])
-    df_tran_node = pd.read_csv(tran_node_path, usecols=['node_id', 'x_coord', 'y_coord', 'directed_service_id', 'node_type'])
-
-    # Filter real transit nodes (remove those with directed_service_id) & keep only "bus_service_node"
-    df_tran_node_real = df_tran_node[
-        
-        (df_tran_node['node_type'] == "bus_service_node")
-    ].copy()
-
-    # Convert coordinates to float for safety
-    df_hwy_node[['x_coord', 'y_coord']] = df_hwy_node[['x_coord', 'y_coord']].astype(float)
-    df_tran_node_real[['x_coord', 'y_coord']] = df_tran_node_real[['x_coord', 'y_coord']].astype(float)
-
-    # Convert to NumPy arrays for fast computation
-    hwy_coords = df_hwy_node[['x_coord', 'y_coord']].to_numpy()
-    tran_coords = df_tran_node_real[['x_coord', 'y_coord']].to_numpy()
-
-    # If no bus service nodes are found, return empty DataFrame
-    if len(tran_coords) == 0:
-        return pd.DataFrame()
-
-    # Build KDTree for highway nodes (fast nearest neighbor search)
-    tree = cKDTree(hwy_coords)
-
-    # Query each transit node to find the nearest highway node
-    distances, indices = tree.query(tran_coords, distance_upper_bound=10000)
-
-    access_links = []
-
-    # Process each transit node (find its nearest highway node)
-    for i, tran_node_id in enumerate(df_tran_node_real['node_id']):
-        hwy_index = indices[i]
-
-        # Ignore if no valid highway node was found within the radius
-        if hwy_index == len(hwy_coords):
-            continue
-
-        # Get corresponding highway node data
-        hwy_node_id = df_hwy_node.iloc[hwy_index]['node_id']
-        tran_point = Point(tran_coords[i])
-        hwy_point = Point(hwy_coords[hwy_index])
-
-        # Calculate geodesic distance
-        distance = uf.calc_distance_on_unit_sphere(tran_point, hwy_point, "mile")
-
-        # Create access link
-        access_links.append(
-            gmns_geo.Link(
-                id = f"{tran_node_id}", 
-                name = "transit_access_link",
-                from_node_id=tran_node_id,
-                to_node_id=int (hwy_node_id),
-                length=distance,
-                lanes=1,
-                dir_flag = 0,
-                free_speed= 2.72727, #4 *3600 / 5280
-                capacity= 0,
-                allowed_uses='t',
-                geometry=LineString([tran_point, hwy_point])
-            )
-        )
-
-    # Convert to DataFrame
-    return pd.DataFrame([link.__dict__ for link in access_links]) if access_links else pd.DataFrame()
-
 
 def _hhmm_to_minutes(time_period_1):
     from_time_1 = datetime.time(int(time_period_1[0:2]), int(time_period_1[2:4]))
@@ -703,11 +632,10 @@ def _hhmm_to_minutes(time_period_1):
 """ ------------------main functions------------------ """
 
 
-def gtfs2gmns(input_path, output_path, time_period):
+def gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True):
     global period_start_time
     global period_end_time
     period_start_time, period_end_time = _hhmm_to_minutes(time_period)
-    
     
     start_time = time.time()
     folders = [folder for folder in os.listdir(input_path) if "check" not in folder]
@@ -752,7 +680,7 @@ def gtfs2gmns(input_path, output_path, time_period):
     all_link_list = create_transferring_links(all_node_df, all_link_list)
 
     all_link_df = pd.DataFrame(all_link_list)
-    all_link_df.rename(columns={0: 'id', # Match hwy network
+    all_link_df.rename(columns={0: 'id', # Match access links
                                 1: 'from_node_id',
                                 2: 'to_node_id',
                                 3: 'transit_type', #'facility_type'
@@ -775,23 +703,41 @@ def gtfs2gmns(input_path, output_path, time_period):
                                 20: 'agency_name',
                                 21: 'stop_sequence',
                                 22: 'directed_service_id'}, inplace=True)
-    all_node_df.to_csv(output_path + '/' + 'node.csv', index=False)
-    #  zone_df = pd.read_csv('zone.csv')
-    #  source_node_df = pd.read_csv('source_node.csv')
-    #  node_df = pd.concat([zone_df, all_node_df])
-    #  node_df.to_csv("node.csv", index=False)
+    
     all_link_df = all_link_df.drop_duplicates(
-        subset=['from_node_id', 'to_node_id'],
-        keep='last').reset_index(drop=True)
-    all_link_df.to_csv(output_path + '/' + 'link.csv', index=False)
+            subset=['from_node_id', 'to_node_id'], keep='last').reset_index(drop=True)
     print('run time -->', time.time() - start_time)
+    if isSaveToCSV == True:
+            
+            if os.path.exists("node_transit.csv"):
+                os.remove("node_transit.csv")
 
+            if os.path.exists("link_transit.csv"):
+                os.remove("link_transit.csv")
+                
+            node_csv_path = os.path.join(output_path, "node_transit.csv")
+            link_csv_path = os.path.join(output_path, "link_transit.csv")
+            
+            all_node_df.to_csv(node_csv_path, index=False)   
+            all_link_df = all_link_df.drop_duplicates(
+                    subset=['from_node_id', 'to_node_id'],
+                    keep='last').reset_index(drop=True)
+            all_link_df.to_csv(link_csv_path, index=False)
+
+            print(f"Info: successfully converted gtfs data to node and link data:\n{node_csv_path} \n{link_csv_path}")
+        
+            print("Info: successfully converted gtfs data to node and link and return node and link dataframes")
+    
+    print('Total Time -->', time.time() - start_time)
+    
+    return all_link_df
 
 if __name__ == '__main__':
     
-    input_path = './GTFS/Phoenix'
-    output_path = './GMNS/Phoenix'
+    input_path = 'src/roanoke/transit'
+    output_path = 'network/roanoke/transit'
     time_period_id = 1
-    time_period = '0700_0800'
+    time_period = '0000_2359'
+    
 
-    gtfs2gmns(input_path, output_path, time_period)
+    gtfs2gmns(input_path, output_path, time_period, isSaveToCSV = True)
